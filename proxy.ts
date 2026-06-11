@@ -4,8 +4,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Skip auth check for login page entirely
-  if (pathname === '/login') {
+  // Skip auth check for login and auth callback
+  if (pathname === '/login' || pathname.startsWith('/auth/')) {
     return NextResponse.next({ request })
   }
 
