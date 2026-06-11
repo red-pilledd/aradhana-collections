@@ -16,9 +16,8 @@ export default async function DashboardPage() {
     .single()
 
   if (!agent) {
-    // Not an authorised user
     await supabase.auth.signOut()
-    redirect('/login?error=not_authorised')
+    redirect(`/login?error=not_authorised:${encodeURIComponent(user.email ?? 'no-email')}`)
   }
 
   if (agent.is_admin) {
