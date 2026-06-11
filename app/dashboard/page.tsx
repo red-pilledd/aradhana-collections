@@ -9,7 +9,7 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
 
   // Check if user is an authorised agent
-  const { data: agent, error: agentError } = await supabase
+  const { data: agent } = await supabase
     .from('agents')
     .select('id, name, is_admin')
     .eq('gmail', user.email)
@@ -17,8 +17,7 @@ export default async function DashboardPage() {
 
   if (!agent) {
     await supabase.auth.signOut()
-    const msg = agentError?.message ?? 'no-row'
-    redirect(`/login?error=${encodeURIComponent(msg + ' | ' + (user.email ?? 'no-email'))}`)
+    redirect('/login?error=not_authorised')
   }
 
   if (agent.is_admin) {
