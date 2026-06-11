@@ -1,10 +1,13 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { useSearchParams } from 'next/navigation'
 
 export default function LoginPage() {
+  const searchParams = useSearchParams()
+  const error = searchParams.get('error')
+
   async function signInWithGoogle() {
-    alert('clicked')
     const supabase = createClient()
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -21,6 +24,11 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-gray-900">Aradhana</h1>
           <p className="text-sm text-gray-500 mt-1">Collections Tracker</p>
         </div>
+        {error && (
+          <div className="w-full bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 break-all">
+            {error}
+          </div>
+        )}
         <button
           onClick={signInWithGoogle}
           className="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-lg px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
