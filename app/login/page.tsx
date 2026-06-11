@@ -5,10 +5,12 @@ import { createClient } from '@/lib/supabase/client'
 export default function LoginPage() {
   async function signInWithGoogle() {
     const supabase = createClient()
-    await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${location.origin}/auth/callback` },
     })
+    if (error) alert('Error: ' + error.message)
+    else if (data?.url) window.location.href = data.url
   }
 
   return (
