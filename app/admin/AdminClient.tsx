@@ -384,9 +384,15 @@ export default function AdminClient({
                     </div>
                   )}
 
-                  {sd.empAgg && Object.keys(sd.empAgg).length > 0 && (
+                  {sd.empAgg && Object.keys(sd.empAgg).length > 0 && (() => {
+                    // Calculate total internet (kvPerAccount) to add to User8's broadband
+                    const kvTotal = sd.kvPerAccount
+                      ? Object.values(sd.kvPerAccount).reduce((sum, acc) => sum + acc.amount, 0)
+                      : 0
+
+                    return (
                     <div>
-                      <p className="text-xs font-medium text-gray-500 mb-2">Agent-wise (Cable collections)</p>
+                      <p className="text-xs font-medium text-gray-500 mb-2">Agent-wise collections</p>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
@@ -399,20 +405,25 @@ export default function AdminClient({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
-                            {Object.entries(sd.empAgg).map(([name, v]) => (
+                            {Object.entries(sd.empAgg).map(([name, v]) => {
+                              const broadband = v.broadband + (name === 'User8' ? kvTotal : 0)
+                              const total = v.digitalTV + broadband
+                              return (
                               <tr key={name}>
                                 <td className="py-2 text-gray-800">{name}</td>
                                 <td className="py-2 text-right text-gray-500">{v.customers}</td>
                                 <td className="py-2 text-right text-gray-600">₹{v.digitalTV.toLocaleString('en-IN')}</td>
-                                <td className="py-2 text-right text-gray-600">₹{v.broadband.toLocaleString('en-IN')}</td>
-                                <td className="py-2 text-right font-semibold text-gray-900">₹{(v.digitalTV + v.broadband).toLocaleString('en-IN')}</td>
+                                <td className={`py-2 text-right ${broadband > 0 ? 'text-gray-600' : 'text-gray-300'}`}>₹{broadband.toLocaleString('en-IN')}</td>
+                                <td className="py-2 text-right font-semibold text-gray-900">₹{total.toLocaleString('en-IN')}</td>
                               </tr>
-                            ))}
+                              )
+                            })}
                           </tbody>
                         </table>
                       </div>
                     </div>
-                  )}
+                    )
+                  })()}
 
                   <p className="text-xs text-gray-400">Script ran: {formatTime(scriptResult!.created_at)}</p>
                 </div>
