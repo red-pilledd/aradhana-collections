@@ -135,6 +135,28 @@ export default function AdminClient({
         agentMap[agentName].totalExpected += dayAmount
         agentMap[agentName].dailyExpected.push({ dateStr: res.date, amount: dayAmount })
       }
+
+      // All internet collections (kvPerAccount) go under User8
+      const kvPerAccount = res.data?.kvPerAccount as Record<string, { count: number; amount: number }> | undefined
+      if (kvPerAccount) {
+        if (!agentMap['User8']) {
+          agentMap['User8'] = { name: 'User8', totalExpected: 0, totalReceived: 0, balance: 0, receipts: [], dailyExpected: [] }
+        }
+        let kvDayTotal = 0
+        for (const acc of Object.values(kvPerAccount)) {
+          kvDayTotal += acc.amount
+        }
+        if (kvDayTotal > 0) {
+          agentMap['User8'].totalExpected += kvDayTotal
+          // Find if we already pushed a dailyExpected for this date from empAgg, and add to it
+          const existing = agentMap['User8'].dailyExpected.find(d => d.dateStr === res.date)
+          if (existing) {
+            existing.amount += kvDayTotal
+          } else {
+            agentMap['User8'].dailyExpected.push({ dateStr: res.date, amount: kvDayTotal })
+          }
+        }
+      }
     }
 
     // Sum received from cash_entries
