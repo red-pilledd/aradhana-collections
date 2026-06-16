@@ -38,12 +38,12 @@ export default async function AdminPage() {
     agents: Array.isArray(e.agents) ? (e.agents[0] ?? null) : e.agents,
   }))
 
-  // Script results for today
-  const todayStr = today.toISOString().split('T')[0]
+  // Fetch the latest script result (could be today or yesterday depending on cron)
   const { data: scriptResult } = await supabase
     .from('script_results')
-    .select('data, created_at')
-    .eq('date', todayStr)
+    .select('data, created_at, date')
+    .order('date', { ascending: false })
+    .limit(1)
     .single()
 
   return (

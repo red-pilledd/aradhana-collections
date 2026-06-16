@@ -9,12 +9,12 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const today = new Date().toISOString().split('T')[0]
+  const date = body.date ?? new Date().toISOString().split('T')[0]
 
   const supabase = await createClient()
   const { error } = await supabase
     .from('script_results')
-    .upsert({ date: today, data: body, created_at: new Date().toISOString() }, { onConflict: 'date' })
+    .upsert({ date, data: body, created_at: new Date().toISOString() }, { onConflict: 'date' })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
