@@ -21,6 +21,10 @@ type ScriptResult = { data: ScriptData; created_at: string; date?: string } | nu
 type LedgerRow = { dateStr: string; expected: number; received: number }
 type LedgerData = { rows: LedgerRow[]; totalExpected: number; totalReceived: number; netBalance: number }
 
+type Receipt = { amount: number; note: string | null; date: string }
+type AgentAccount = { name: string; totalExpected: number; totalReceived: number; balance: number; receipts: Receipt[]; dailyExpected: { dateStr: string; amount: number }[] }
+type AgentAccountsData = { agents: AgentAccount[]; totalExpected: number; totalReceived: number; netBalance: number }
+
 function toDateStr(d: Date) {
   return d.toISOString().split('T')[0]
 }
@@ -43,7 +47,7 @@ export default function AdminClient({
   const router = useRouter()
   const todayStr = toDateStr(new Date())
 
-  const [tab, setTab] = useState<'today' | 'agents' | 'accounts'>('today')
+  const [tab, setTab] = useState<'today' | 'agents' | 'accounts' | 'agent-accounts'>('today')
   const [selectedDate, setSelectedDate] = useState(todayStr)
   const [entries, setEntries] = useState<Entry[]>(todayEntries)
   const [scriptResult, setScriptResult] = useState<ScriptResult>(initialScriptResult)
@@ -56,6 +60,10 @@ export default function AdminClient({
 
   const [ledgerData, setLedgerData] = useState<LedgerData | null>(null)
   const [loadingLedger, setLoadingLedger] = useState(false)
+
+  const [agentAccounts, setAgentAccounts] = useState<AgentAccountsData | null>(null)
+  const [loadingAgentAccounts, setLoadingAgentAccounts] = useState(false)
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
 
   const loadLedger = useCallback(async () => {
     if (ledgerData) return
@@ -96,11 +104,79 @@ export default function AdminClient({
     setLoadingLedger(false)
   }, [ledgerData])
 
+  const loadAgentAccounts = useCallback(async () => {
+    if (agentAccounts) return
+    setLoadingAgentAccounts(true)
+    const supabase = createClient()
+    const [{ data: sr }, { data: ce }, { data: allAgents }] = await Promise.all([
+      supabase.from('script_results').select('date, data').order('date', { ascending: false }),
+      supabase.from('cash_entries').select('amount, note, created_at, agent_id, agents(name)'),
+      supabase.from('agents').select('id, name').eq('is_admin', false)
+    ])
+
+    // Build expected per agent from empAgg
+    const agentMap: Record<string, AgentAccount> = {}
+
+    // Initialize all known agents
+    for (const a of (allAgents || [])) {
+      agentMap[a.name] = { name: a.name, totalExpected: 0, totalReceived: 0, balance: 0, receipts: [], dailyExpected: [] }
+    }
+
+    // Sum expected from empAgg across all script results
+    for (const res of (sr || [])) {
+      const empAgg = res.data?.empAgg
+      if (!empAgg) continue
+      for (const [agentName, v] of Object.entries(empAgg)) {
+        if (!agentMap[agentName]) {
+          agentMap[agentName] = { name: agentName, totalExpected: 0, totalReceived: 0, balance: 0, receipts: [], dailyExpected: [] }
+        }
+        const dayAmount = ((v as {digitalTV?: number; broadband?: number}).digitalTV ?? 0) + ((v as {digitalTV?: number; broadband?: number}).broadband ?? 0)
+        agentMap[agentName].totalExpected += dayAmount
+        agentMap[agentName].dailyExpected.push({ dateStr: res.date, amount: dayAmount })
+      }
+    }
+
+    // Sum received from cash_entries
+    for (const entry of (ce || [])) {
+      const entryAny = entry as any
+      const agentName = Array.isArray(entryAny.agents) ? (entryAny.agents[0]?.name ?? 'Unknown') : (entryAny.agents?.name ?? 'Unknown')
+      if (!agentMap[agentName]) {
+        agentMap[agentName] = { name: agentName, totalExpected: 0, totalReceived: 0, balance: 0, receipts: [], dailyExpected: [] }
+      }
+      agentMap[agentName].totalReceived += entry.amount
+      const localDate = new Date(new Date(entry.created_at).getTime() + 5.5 * 60 * 60 * 1000)
+      agentMap[agentName].receipts.push({
+        amount: entry.amount,
+        note: entry.note,
+        date: localDate.toISOString().split('T')[0]
+      })
+    }
+
+    // Calculate balances and sort receipts
+    const agents = Object.values(agentMap)
+    let totalExpected = 0
+    let totalReceived = 0
+    for (const a of agents) {
+      a.balance = a.totalExpected - a.totalReceived
+      a.receipts.sort((x, y) => y.date.localeCompare(x.date))
+      a.dailyExpected.sort((x, y) => y.dateStr.localeCompare(x.dateStr))
+      totalExpected += a.totalExpected
+      totalReceived += a.totalReceived
+    }
+    agents.sort((a, b) => b.balance - a.balance) // highest pending first
+
+    setAgentAccounts({ agents, totalExpected, totalReceived, netBalance: totalExpected - totalReceived })
+    setLoadingAgentAccounts(false)
+  }, [agentAccounts])
+
   useEffect(() => {
     if (tab === 'accounts' && !ledgerData && !loadingLedger) {
       loadLedger()
     }
-  }, [tab, ledgerData, loadingLedger, loadLedger])
+    if (tab === 'agent-accounts' && !agentAccounts && !loadingAgentAccounts) {
+      loadAgentAccounts()
+    }
+  }, [tab, ledgerData, loadingLedger, loadLedger, agentAccounts, loadingAgentAccounts, loadAgentAccounts])
 
   const fetchDate = useCallback(async (dateStr: string) => {
     setLoading(true)
@@ -202,13 +278,13 @@ export default function AdminClient({
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Tabs */}
         <div className="flex gap-2">
-          {(['today', 'accounts', 'agents'] as const).map(t => (
+          {(['today', 'accounts', 'agent-accounts', 'agents'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${tab === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'}`}
             >
-              {t === 'today' ? 'Collections' : t === 'accounts' ? 'Accounts Ledger' : 'Manage Agents'}
+              {t === 'today' ? 'Collections' : t === 'accounts' ? 'Day Ledger' : t === 'agent-accounts' ? 'Agent Accounts' : 'Manage Agents'}
             </button>
           ))}
         </div>
@@ -455,6 +531,95 @@ export default function AdminClient({
                     <div className="text-center py-6 text-sm text-gray-400">No account data found.</div>
                   )}
                 </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {tab === 'agent-accounts' && (
+          <div className="space-y-4">
+            {!agentAccounts ? (
+              <div className="text-sm text-gray-500 text-center py-6">Loading agent accounts...</div>
+            ) : (
+              <>
+                <div className="bg-white rounded-2xl shadow-sm p-5 flex gap-8 flex-wrap">
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase">Total Expected</p>
+                    <p className="text-2xl font-bold text-gray-900">₹{agentAccounts.totalExpected.toLocaleString('en-IN')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase">Total Received</p>
+                    <p className="text-2xl font-bold text-green-600">₹{agentAccounts.totalReceived.toLocaleString('en-IN')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase">Outstanding</p>
+                    <p className={`text-2xl font-bold ${agentAccounts.netBalance > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                      ₹{agentAccounts.netBalance.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                </div>
+
+                {agentAccounts.agents.map(agent => (
+                  <div key={agent.name} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => setExpandedAgent(expandedAgent === agent.name ? null : agent.name)}
+                      className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition"
+                    >
+                      <div className="text-left">
+                        <p className="font-semibold text-gray-900">{agent.name}</p>
+                        <div className="flex gap-4 mt-1 text-xs text-gray-500">
+                          <span>Expected: <span className="text-gray-700 font-medium">₹{agent.totalExpected.toLocaleString('en-IN')}</span></span>
+                          <span>Received: <span className="text-green-600 font-medium">₹{agent.totalReceived.toLocaleString('en-IN')}</span></span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-lg font-bold ${agent.balance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                          {agent.balance > 0 ? `₹${agent.balance.toLocaleString('en-IN')}` : '✓ Settled'}
+                        </p>
+                        <p className="text-xs text-gray-400">{agent.balance > 0 ? 'pending' : ''}</p>
+                      </div>
+                    </button>
+
+                    {expandedAgent === agent.name && (
+                      <div className="border-t px-5 py-4 space-y-4">
+                        {/* Daily expected collections */}
+                        {agent.dailyExpected.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase mb-2">Daily Collections (Expected)</p>
+                            <div className="space-y-1">
+                              {agent.dailyExpected.map((d, i) => (
+                                <div key={i} className="flex justify-between text-sm py-1">
+                                  <span className="text-gray-600">{toDisplayDate(d.dateStr)}</span>
+                                  <span className="text-gray-800 font-medium">₹{d.amount.toLocaleString('en-IN')}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cash receipts */}
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 uppercase mb-2">Cash Received ({agent.receipts.length} payments)</p>
+                          {agent.receipts.length === 0 ? (
+                            <p className="text-sm text-gray-400">No cash handed in yet.</p>
+                          ) : (
+                            <div className="space-y-1">
+                              {agent.receipts.map((r, i) => (
+                                <div key={i} className="flex justify-between text-sm py-1 items-start">
+                                  <div>
+                                    <span className="text-green-600 font-medium">₹{r.amount.toLocaleString('en-IN')}</span>
+                                    {r.note && <span className="text-gray-400 ml-2 text-xs">{r.note}</span>}
+                                  </div>
+                                  <span className="text-gray-500 text-xs whitespace-nowrap">{toDisplayDate(r.date)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </>
             )}
           </div>
