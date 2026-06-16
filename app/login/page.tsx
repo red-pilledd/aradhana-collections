@@ -66,6 +66,8 @@ function LoginForm() {
           required
           autoCapitalize="off"
           autoCorrect="off"
+          autoComplete="username"
+          name="username"
         />
         <input
           type="password"
@@ -74,6 +76,8 @@ function LoginForm() {
           onChange={e => setPassword(e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           required
+          autoComplete="current-password"
+          name="password"
         />
         {error && <p className="text-red-500 text-sm">{error}</p>}
         <button
