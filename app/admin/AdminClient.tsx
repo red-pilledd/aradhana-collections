@@ -53,7 +53,8 @@ export default function AdminClient({
   const [scriptResult, setScriptResult] = useState<ScriptResult>(initialScriptResult)
   const [loading, setLoading] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newGmail, setNewGmail] = useState('')
+  const [newUsername, setNewUsername] = useState('')
+  const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [agentList, setAgentList] = useState(initialAgents)
   const [agentError, setAgentError] = useState('')
@@ -224,18 +225,24 @@ export default function AdminClient({
   async function addAgent(e: React.FormEvent) {
     e.preventDefault()
     setAgentError('')
-    if (!newName.trim() || !newGmail.trim()) return
+    if (!newName.trim() || !newUsername.trim() || !newPassword) return
+    if (newPassword.length < 6) { setAgentError('Password must be at least 6 characters'); return }
     setSaving(true)
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from('agents')
-      .insert({ name: newName.trim(), gmail: newGmail.trim().toLowerCase(), is_admin: false })
-      .select('id, name, gmail')
-      .single()
-    if (error) { setAgentError('Failed to add. Gmail may already exist.'); setSaving(false); return }
-    setAgentList([...agentList, data])
-    setNewName('')
-    setNewGmail('')
+    try {
+      const res = await fetch('/api/agents/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim(), username: newUsername.trim(), password: newPassword })
+      })
+      const result = await res.json()
+      if (!res.ok) { setAgentError(result.error || 'Failed to create agent'); setSaving(false); return }
+      setAgentList([...agentList, result.agent])
+      setNewName('')
+      setNewUsername('')
+      setNewPassword('')
+    } catch {
+      setAgentError('Network error. Try again.')
+    }
     setSaving(false)
   }
 
@@ -437,10 +444,20 @@ export default function AdminClient({
                   required
                 />
                 <input
-                  type="email"
-                  placeholder="Gmail address"
-                  value={newGmail}
-                  onChange={e => setNewGmail(e.target.value)}
+                  type="text"
+                  placeholder="Username (for login)"
+                  value={newUsername}
+                  onChange={e => setNewUsername(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                />
+                <input
+                  type="text"
+                  placeholder="Password (min 6 chars)"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
@@ -465,7 +482,7 @@ export default function AdminClient({
                     <li key={a.id} className="py-3 flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{a.name}</p>
-                        <p className="text-xs text-gray-400">{a.gmail}</p>
+                        <p className="text-xs text-gray-400">{a.gmail.endsWith('@aradhana.local') ? a.gmail.replace('@aradhana.local', '') : a.gmail}</p>
                       </div>
                       <button
                         onClick={() => removeAgent(a.id)}
