@@ -630,46 +630,54 @@ export default function AdminClient({
                       </div>
                     </button>
 
-                    {expandedAgent === agent.name && (
-                      <div className="border-t px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                        {/* Daily expected collections */}
-                        <div className="bg-gray-50/50 rounded-lg p-3">
-                          <p className="text-xs font-medium text-gray-500 uppercase mb-3">Daily Collections (Expected)</p>
-                          {agent.dailyExpected.length === 0 ? (
-                            <p className="text-sm text-gray-400">No expected collections recorded.</p>
-                          ) : (
-                            <div className="space-y-1.5">
-                              {agent.dailyExpected.map((d, i) => (
-                                <div key={i} className="flex justify-between items-center text-sm py-2 border-b border-gray-100 last:border-0">
-                                  <span className="text-gray-600">{toDisplayDate(d.dateStr)}</span>
-                                  <span className="text-gray-800 font-medium">₹{d.amount.toLocaleString('en-IN')}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                    {expandedAgent === agent.name && (() => {
+                      const dayMap: Record<string, { expected: number, received: number, notes: string[] }> = {};
+                      agent.dailyExpected.forEach(d => {
+                        if (!dayMap[d.dateStr]) dayMap[d.dateStr] = { expected: 0, received: 0, notes: [] };
+                        dayMap[d.dateStr].expected += d.amount;
+                      });
+                      agent.receipts.forEach(r => {
+                        if (!dayMap[r.date]) dayMap[r.date] = { expected: 0, received: 0, notes: [] };
+                        dayMap[r.date].received += r.amount;
+                        if (r.note) dayMap[r.date].notes.push(r.note);
+                      });
+                      const unifiedRows = Object.entries(dayMap)
+                        .map(([dateStr, v]) => ({ dateStr, ...v }))
+                        .sort((a, b) => b.dateStr.localeCompare(a.dateStr));
 
-                        {/* Cash receipts */}
-                        <div className="bg-green-50/30 rounded-lg p-3">
-                          <p className="text-xs font-medium text-gray-500 uppercase mb-3">Cash Received ({agent.receipts.length})</p>
-                          {agent.receipts.length === 0 ? (
-                            <p className="text-sm text-gray-400">No cash handed in yet.</p>
-                          ) : (
-                            <div className="space-y-1.5">
-                              {agent.receipts.map((r, i) => (
-                                <div key={i} className="flex justify-between items-center text-sm py-2 border-b border-gray-100 last:border-0">
-                                  <span className="text-gray-600">{toDisplayDate(r.date)}</span>
-                                  <div className="text-right">
-                                    <span className="text-green-700 font-medium">₹{r.amount.toLocaleString('en-IN')}</span>
-                                    {r.note && <p className="text-gray-500 text-[10px] leading-tight mt-0.5">{r.note}</p>}
-                                  </div>
-                                </div>
+                      return (
+                        <div className="border-t">
+                          <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 border-b text-gray-500 text-[10px] uppercase tracking-wider">
+                              <tr>
+                                <th className="px-5 py-3 font-medium">Date</th>
+                                <th className="px-5 py-3 font-medium text-right">Daily Coll.</th>
+                                <th className="px-5 py-3 font-medium text-right">Received</th>
+                                <th className="px-5 py-3 font-medium text-right">Net</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {unifiedRows.map(row => (
+                                <tr key={row.dateStr} className="hover:bg-gray-50/50">
+                                  <td className="px-5 py-2.5 text-gray-900 font-medium whitespace-nowrap">{toDisplayDate(row.dateStr)}</td>
+                                  <td className="px-5 py-2.5 text-right text-gray-600">₹{row.expected.toLocaleString('en-IN')}</td>
+                                  <td className="px-5 py-2.5 text-right text-green-600">
+                                    ₹{row.received.toLocaleString('en-IN')}
+                                    {row.notes.length > 0 && <p className="text-[10px] text-gray-400 leading-tight mt-0.5">{row.notes.join(', ')}</p>}
+                                  </td>
+                                  <td className={`px-5 py-2.5 text-right font-medium ${row.expected - row.received > 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                                    {row.expected - row.received !== 0 ? `₹${(row.expected - row.received).toLocaleString('en-IN')}` : '0'}
+                                  </td>
+                                </tr>
                               ))}
-                            </div>
+                            </tbody>
+                          </table>
+                          {unifiedRows.length === 0 && (
+                            <div className="px-5 py-6 text-center text-sm text-gray-400">No expected collections or cash received.</div>
                           )}
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 ))}
               </>
