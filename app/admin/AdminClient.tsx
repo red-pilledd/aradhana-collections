@@ -640,7 +640,7 @@ export default function AdminClient({
                           ) : (
                             <div className="space-y-1.5">
                               {agent.dailyExpected.map((d, i) => (
-                                <div key={i} className="flex justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+                                <div key={i} className="flex justify-between items-center text-sm py-2 border-b border-gray-100 last:border-0">
                                   <span className="text-gray-600">{toDisplayDate(d.dateStr)}</span>
                                   <span className="text-gray-800 font-medium">₹{d.amount.toLocaleString('en-IN')}</span>
                                 </div>
@@ -657,12 +657,12 @@ export default function AdminClient({
                           ) : (
                             <div className="space-y-1.5">
                               {agent.receipts.map((r, i) => (
-                                <div key={i} className="flex justify-between text-sm py-1 items-start border-b border-gray-100 last:border-0">
-                                  <div>
+                                <div key={i} className="flex justify-between items-center text-sm py-2 border-b border-gray-100 last:border-0">
+                                  <span className="text-gray-600">{toDisplayDate(r.date)}</span>
+                                  <div className="text-right">
                                     <span className="text-green-700 font-medium">₹{r.amount.toLocaleString('en-IN')}</span>
                                     {r.note && <p className="text-gray-500 text-[10px] leading-tight mt-0.5">{r.note}</p>}
                                   </div>
-                                  <span className="text-gray-500 text-xs whitespace-nowrap mt-0.5">{toDisplayDate(r.date)}</span>
                                 </div>
                               ))}
                             </div>
