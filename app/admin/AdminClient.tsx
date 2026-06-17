@@ -641,9 +641,15 @@ export default function AdminClient({
                         dayMap[r.date].received += r.amount;
                         if (r.note) dayMap[r.date].notes.push(r.note);
                       });
-                      const unifiedRows = Object.entries(dayMap)
+                      const sortedRowsAsc = Object.entries(dayMap)
                         .map(([dateStr, v]) => ({ dateStr, ...v }))
-                        .sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+                        .sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+                      
+                      let runningBalance = 0;
+                      const unifiedRows = sortedRowsAsc.map(row => {
+                        runningBalance += (row.expected - row.received);
+                        return { ...row, cumulativeNet: runningBalance };
+                      }).reverse();
 
                       return (
                         <div className="border-t">
@@ -653,7 +659,7 @@ export default function AdminClient({
                                 <th className="px-5 py-3 font-medium">Date</th>
                                 <th className="px-5 py-3 font-medium text-right">Daily Coll.</th>
                                 <th className="px-5 py-3 font-medium text-right">Received</th>
-                                <th className="px-5 py-3 font-medium text-right">Net</th>
+                                <th className="px-5 py-3 font-medium text-right">Net Balance</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -665,8 +671,8 @@ export default function AdminClient({
                                     ₹{row.received.toLocaleString('en-IN')}
                                     {row.notes.length > 0 && <p className="text-[10px] text-gray-400 leading-tight mt-0.5">{row.notes.join(', ')}</p>}
                                   </td>
-                                  <td className={`px-5 py-2.5 text-right font-medium ${row.expected - row.received > 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                                    {row.expected - row.received !== 0 ? `₹${(row.expected - row.received).toLocaleString('en-IN')}` : '0'}
+                                  <td className={`px-5 py-2.5 text-right font-medium ${row.cumulativeNet > 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                                    {row.cumulativeNet !== 0 ? `${row.cumulativeNet > 0 ? '' : ''}₹${row.cumulativeNet.toLocaleString('en-IN')}` : '0'}
                                   </td>
                                 </tr>
                               ))}
